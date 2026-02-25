@@ -1,0 +1,26 @@
+name: CI — Build & Test
+
+# Placeholder CI workflow — update when implementation language is chosen.
+
+on:
+  push:
+    branches: [dev, stage, main]
+  pull_request:
+    branches: [dev, stage, main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check repo structure
+        run: |
+          echo "bridge-gateway CI"
+          echo "Language/framework: TBD"
+          ls -la
+          echo "Validation passed"
