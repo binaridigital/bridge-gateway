@@ -1,0 +1,192 @@
+server:
+  port: 4000
+
+spring:
+  application:
+    name: bridge-gateway
+  autoconfigure:
+    exclude:
+      - org.springframework.cloud.vault.config.VaultAutoConfiguration
+      - org.springframework.cloud.vault.config.VaultReactiveAutoConfiguration
+      - org.springframework.cloud.vault.config.VaultObservationAutoConfiguration
+  data:
+    redis:
+      host: ${REDIS_HOST:bridge-redis-master.bridge-service-stack.svc.cluster.local}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 5000
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "https://orchestrator.binari.digital"
+              - "http://localhost:3000"
+              - "http://localhost:5173"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+      routes:
+        - id: orchestra-api
+          uri: ${ORCHESTRA_BASE_URL:http://bridge-orchestra-api:8080}
+          predicates:
+            - Path=/api/v1/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: orchestra
+                fallbackUri: forward:/fallback/orchestra
+            - name: Retry
+              args:
+                retries: 3
+                methods: GET
+                backoff:
+                  firstBackoff: 100ms
+                  maxBackoff: 1000ms
+                  factor: 2
+        - id: custody-api
+          uri: ${CUSTODY_BASE_URL:http://bridge-custody-api:8081}
+          predicates:
+            - Path=/api/v1/custody/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: custody
+                fallbackUri: forward:/fallback/custody
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                backoff:
+                  firstBackoff: 200ms
+                  maxBackoff: 2000ms
+                  factor: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,prometheus
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      sla:
+        http.server.requests: 50ms,100ms,200ms,500ms,1s,5s
+
+# Gateway custom config
+gateway:
+  auth:
+    api-keys: ${GATEWAY_API_KEYS:}
+    header-name: X-API-Key
+
+  security:
+    max-request-size: 10485760
+    allowed-ip-ranges: []
+
+  cors:
+    allowed-origins:
+      - "https://orchestrator.binari.digital"
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      - "http://localhost:5174"
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+      - OPTIONS
+    allowed-headers:
+      - "*"
+    allow-credentials: true
+
+  routes:
+    orchestra:
+      enabled: true
+      path: /api/v1/**
+      uri: ${ORCHESTRA_BASE_URL:http://bridge-orchestra-api:8080}
+      strip-prefix: 0
+      plugins:
+        - audit
+    custody:
+      enabled: true
+      path: /api/v1/custody/**
+      uri: ${CUSTODY_BASE_URL:http://bridge-custody-api:8081}
+      strip-prefix: 0
+      plugins:
+        - audit
+        - compliance
+    wallet:
+      enabled: false
+      path: /api/v1/wallet/**
+      uri: ${WALLET_BASE_URL:http://bridge-wallet:8080}
+      strip-prefix: 0
+      plugins:
+        - audit
+
+  plugins:
+    configs:
+      audit:
+        enabled: true
+        order: 10
+        settings:
+          kafka-topic: gateway.audit.events
+          log-headers: true
+          log-body: false
+      monetization:
+        enabled: false
+        order: 100
+        settings:
+          billing-service-url: ${BILLING_SERVICE_URL:http://billing-service:8080}
+          free-tier-limit: 1000
+      compliance:
+        enabled: false
+        order: 50
+        settings:
+          orbit-url: ${ORBIT_GATEWAY_URL:http://orbit-gateway:3001}
+          timeout-ms: 5000
+
+logging:
+  level:
+    root: INFO
+    digital.binari.bridge.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+  pattern:
+    console: "%d{ISO8601} [%thread] [%X{correlationId}] %-5level %logger{36} - %msg%n"
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+    instances:
+      orchestra:
+        base-config: default
+      custody:
+        base-config: default
+        failure-rate-threshold: 30
+        wait-duration-in-open-state: 60s
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 10s
+    instances:
+      custody:
+        timeout-duration: 15s

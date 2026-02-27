@@ -1,0 +1,25 @@
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowCredentials: true
+
+gateway:
+  auth:
+    api-keys: ${GATEWAY_API_KEYS:}
+
+  routes:
+    orchestra:
+      uri: http://bridge-orchestra-api.bridge-service-stack.svc.cluster.local:8080
+    custody:
+      uri: http://bridge-custody-api.bridge-service-stack.svc.cluster.local:8081
+    wallet:
+      uri: http://bridge-wallet.bridge-service-stack.svc.cluster.local:8080
+
+logging:
+  level:
+    digital.binari.bridge.gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG
