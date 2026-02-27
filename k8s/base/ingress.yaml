@@ -1,0 +1,58 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bridge-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://orchestrator.binari.digital"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,X-API-Key,X-Correlation-Id"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gateway.bridgeintelligence.ltd
+      secretName: bridge-gateway-tls
+    - hosts:
+        - api.custody.app.d.bridgeintelligence.ltd
+      secretName: bridge-gateway-api-custody-tls
+    - hosts:
+        - custody.app.d.bridgeintelligence.ltd
+      secretName: bridge-gateway-custody-ui-tls
+  rules:
+    - host: gateway.bridgeintelligence.ltd
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bridge-gateway
+                port:
+                  number: 4000
+    - host: api.custody.app.d.bridgeintelligence.ltd
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bridge-gateway
+                port:
+                  number: 4000
+    - host: custody.app.d.bridgeintelligence.ltd
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bridge-gateway
+                port:
+                  number: 4000
