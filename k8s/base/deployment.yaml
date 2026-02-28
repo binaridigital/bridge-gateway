@@ -17,13 +17,28 @@ spec:
         app: bridge-gateway
         component: gateway
       annotations:
-        vault.hashicorp.com/agent-inject: "false"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-inject-status: "update"
+        vault.hashicorp.com/role: "bridge-gateway-dev"
+        vault.hashicorp.com/agent-inject-secret-config: ""
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/bridge/dev/gateway" -}}
+          export GATEWAY_API_KEYS="{{ .Data.data.gateway_api_keys }}"
+          export REDIS_PASSWORD="{{ .Data.data.redis_password }}"
+          {{- end }}
     spec:
       serviceAccountName: bridge-gateway
       containers:
         - name: bridge-gateway
           image: harbor.binari.digital/bridge-gateway/bridge-gateway:dev-latest
           imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              if [ -f /vault/secrets/config ]; then
+                source /vault/secrets/config
+              fi
+              exec java -jar /app/app.jar
           ports:
             - name: http
               containerPort: 4000
@@ -36,8 +51,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: bridge-gateway-config
-            - secretRef:
-                name: bridge-gateway-secrets
           resources:
             requests:
               cpu: 200m

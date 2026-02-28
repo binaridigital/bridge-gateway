@@ -8,13 +8,6 @@ resources:
 
 patches:
   - target:
-      kind: Ingress
-      name: bridge-gateway
-    patch: |
-      - op: replace
-        path: /spec/tls/0/secretName
-        value: bridge-gateway-tls
-  - target:
       kind: Deployment
       name: bridge-gateway
     patch: |
