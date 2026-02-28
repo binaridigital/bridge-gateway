@@ -23,9 +23,31 @@ error validating token: invalid audience (aud) claim:
 audience claim does not match any expected audience
 ```
 
-**Root cause:** The workflow used `jwtGithubAudience: https://github.com/bridge-intelligence` but the Vault role expects `bound_audiences: [https://github.com/binaridigital]`.
+**Root cause (two conflicting constraints):**
+1. With `jwtGithubAudience: https://github.com/bridge-intelligence` → Vault rejected: "audience claim does not match"
+2. With `jwtGithubAudience: https://github.com/binaridigital` → GitHub rejected: "Can't issue ID_TOKEN for audience 'https://github.com/binaridigital'" (repo is under bridge-intelligence org)
 
-**Fix:** Update workflow to use `jwtGithubAudience: https://github.com/binaridigital` to match Vault.
+**Fix:** Add `https://github.com/bridge-intelligence` to Vault role's `bound_audiences`. Keep workflow as `jwtGithubAudience: https://github.com/bridge-intelligence`.
+
+**Vault update (run with root token):**
+```bash
+# Create role config JSON, then apply (adds bridge-intelligence to bound_audiences)
+cat <<'EOF' > /tmp/gateway-role.json
+{
+  "bound_audiences": ["https://github.com/bridge-intelligence", "https://github.com/binaridigital"],
+  "user_claim": "repository",
+  "role_type": "jwt",
+  "token_policies": ["bridge-gateway-cicd-dev"],
+  "token_ttl": "1h",
+  "bound_claims_type": "glob",
+  "bound_claims": {
+    "ref": "refs/heads/dev",
+    "repository": "bridge-intelligence/bridge-gateway"
+  }
+}
+EOF
+vault write auth/jwt/role/github-bridge-gateway-dev -input=/tmp/gateway-role.json
+```
 
 ---
 
@@ -53,8 +75,8 @@ gh run list --repo bridge-intelligence/bridge-gateway --limit 10
 # View failed run details
 gh run view 22523307853 --repo bridge-intelligence/bridge-gateway
 
-# Watch a run (replace RUN_ID with actual ID)
-gh run watch RUN_ID --repo bridge-intelligence/bridge-gateway
+# Watch a run (use the ID number from run list - NOT the literal "<run-id>")
+gh run watch 22525553974 --repo bridge-intelligence/bridge-gateway
 
 # Re-run failed workflow
 gh run rerun 22523307853 --repo bridge-intelligence/bridge-gateway --failed
