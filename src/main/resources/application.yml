@@ -31,23 +31,6 @@ spring:
             allowCredentials: true
             maxAge: 3600
       routes:
-        - id: orchestra-api
-          uri: ${ORCHESTRA_BASE_URL:http://bridge-orchestra-api:8080}
-          predicates:
-            - Path=/api/v1/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: orchestra
-                fallbackUri: forward:/fallback/orchestra
-            - name: Retry
-              args:
-                retries: 3
-                methods: GET
-                backoff:
-                  firstBackoff: 100ms
-                  maxBackoff: 1000ms
-                  factor: 2
         - id: custody-api
           uri: ${CUSTODY_BASE_URL:http://bridge-custody-api:8081}
           predicates:
@@ -64,6 +47,58 @@ spring:
                 backoff:
                   firstBackoff: 200ms
                   maxBackoff: 2000ms
+                  factor: 2
+        - id: identity-api
+          uri: ${IDENTITY_BASE_URL:http://bridge-id:8080}
+          predicates:
+            - Path=/api/v1/identity/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: identity
+                fallbackUri: forward:/fallback/identity
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                backoff:
+                  firstBackoff: 100ms
+                  maxBackoff: 1000ms
+                  factor: 2
+        - id: licensing-api
+          uri: ${LICENSING_BASE_URL:http://bridge-licensing:8080}
+          predicates:
+            - Path=/api/v1/licensing/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: licensing
+                fallbackUri: forward:/fallback/licensing
+        - id: brokerage-api
+          uri: ${BROKERAGE_BASE_URL:http://bridge-brokerage:8080}
+          predicates:
+            - Path=/api/v1/brokerage/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: brokerage
+                fallbackUri: forward:/fallback/brokerage
+        - id: orchestra-api
+          uri: ${ORCHESTRA_BASE_URL:http://bridge-orchestra-api:8080}
+          predicates:
+            - Path=/api/v1/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: orchestra
+                fallbackUri: forward:/fallback/orchestra
+            - name: Retry
+              args:
+                retries: 3
+                methods: GET
+                backoff:
+                  firstBackoff: 100ms
+                  maxBackoff: 1000ms
                   factor: 2
 
 management:
@@ -99,6 +134,10 @@ gateway:
   cors:
     allowed-origins:
       - "https://orchestrator.binari.digital"
+      - "https://orchestra.service.d.bridgeintelligence.ltd"
+      - "https://custody.service.d.bridgeintelligence.ltd"
+      - "https://id.service.d.bridgeintelligence.ltd"
+      - "https://dlt.service.d.bridgeintelligence.ltd"
       - "http://localhost:3000"
       - "http://localhost:5173"
       - "http://localhost:5174"
@@ -129,10 +168,32 @@ gateway:
       plugins:
         - audit
         - compliance
+    identity:
+      enabled: true
+      path: /api/v1/identity/**
+      uri: ${IDENTITY_BASE_URL:http://bridge-id:8080}
+      strip-prefix: 0
+      plugins:
+        - audit
+    licensing:
+      enabled: true
+      path: /api/v1/licensing/**
+      uri: ${LICENSING_BASE_URL:http://bridge-licensing:8080}
+      strip-prefix: 0
+      plugins:
+        - audit
+    brokerage:
+      enabled: ${BROKERAGE_ENABLED:false}
+      path: /api/v1/brokerage/**
+      uri: ${BROKERAGE_BASE_URL:http://bridge-brokerage:8080}
+      strip-prefix: 0
+      plugins:
+        - audit
+        - monetization
     wallet:
-      enabled: false
+      enabled: true
       path: /api/v1/wallet/**
-      uri: ${WALLET_BASE_URL:http://bridge-wallet:8080}
+      uri: ${WALLET_BASE_URL:http://bridge-wallet:3000}
       strip-prefix: 0
       plugins:
         - audit
@@ -183,6 +244,14 @@ resilience4j:
         base-config: default
         failure-rate-threshold: 30
         wait-duration-in-open-state: 60s
+      identity:
+        base-config: default
+      licensing:
+        base-config: default
+      brokerage:
+        base-config: default
+        failure-rate-threshold: 40
+        wait-duration-in-open-state: 45s
   timelimiter:
     configs:
       default:
