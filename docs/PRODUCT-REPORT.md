@@ -3,7 +3,7 @@
 **Document Version:** 1.0
 **Date:** 2026-02-27
 **Classification:** Internal -- Stakeholder Review
-**Repository:** `binaridigital/bridge-gateway`
+**Repository:** `bridge-intelligence/bridge-gateway`
 **Vendor:** Binari Digital
 
 ---
