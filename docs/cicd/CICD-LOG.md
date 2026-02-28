@@ -23,36 +23,9 @@ error validating token: invalid audience (aud) claim:
 audience claim does not match any expected audience
 ```
 
-**Root cause:** The Vault JWT role `github-bridge-gateway-dev` does not have `bound_audiences` configured to accept the GitHub OIDC token's audience. The workflow uses `jwtGithubAudience: https://github.com/bridge-intelligence`, so the role must include this in `bound_audiences`.
+**Root cause:** The workflow used `jwtGithubAudience: https://github.com/bridge-intelligence` but the Vault role expects `bound_audiences: [https://github.com/binaridigital]`.
 
----
-
-## Vault Fix (run with root token)
-
-```bash
-export VAULT_ADDR="https://vault.binari.digital"
-export VAULT_TOKEN="<your-root-token>"
-
-# 1. Inspect current role config
-vault read auth/jwt/role/github-bridge-gateway-dev
-
-# 2. Update role to add bound_audiences (merge with existing config)
-vault write auth/jwt/role/github-bridge-gateway-dev \
-  bound_audiences="https://github.com/bridge-intelligence" \
-  user_claim="actor" \
-  role_type="jwt" \
-  policies="<existing-policy-name>" \
-  bound_claims_type="glob" \
-  bound_claims='{"repository":"bridge-intelligence/bridge-gateway"}'
-```
-
-**Note:** Replace `<existing-policy-name>` with the policy currently attached (from step 1). If the role has other settings (e.g. `token_ttl`), include them in the write.
-
-**Alternative:** If `github-bridge-orchestra-dev` works, copy its config:
-```bash
-vault read auth/jwt/role/github-bridge-orchestra-dev
-# Then replicate for github-bridge-gateway-dev with bound_claims for bridge-gateway repo
-```
+**Fix:** Update workflow to use `jwtGithubAudience: https://github.com/binaridigital` to match Vault.
 
 ---
 
