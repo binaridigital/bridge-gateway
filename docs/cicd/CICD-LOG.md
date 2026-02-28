@@ -6,38 +6,52 @@
 
 | Item | Status |
 |------|--------|
-| Vault GitHub AppRole | ✅ `github-bridge-gateway-dev` exists |
+| Vault JWT role | ✅ `github-bridge-gateway-dev` exists |
 | Harbor secret | ✅ `kv/cicd/harbor/bridge-gateway` exists |
-| CD failure cause | Vault path format (KV v2) |
-| Fix applied | Updated secrets path in `cd-dev.yml` |
+| CD failure cause | **JWT audience mismatch** (not path) |
+| Fix required | Add `bound_audiences` to Vault role |
 
 ---
 
-## Failure Analysis (Run 22523307853)
+## Actual Root Cause (Run 22525507847)
 
 **Failed step:** Get Harbor credentials from Vault (step 7)
 
-**Root cause:** Incorrect KV v2 path format for `hashicorp/vault-action`.
+**Error message:**
+```
+error validating token: invalid audience (aud) claim: 
+audience claim does not match any expected audience
+```
 
-- **Wrong:** `kv/cicd/harbor/bridge-gateway/data/harbor-registry`
-- **Correct:** `kv/data/cicd/harbor/bridge-gateway` with keys `username`, `password`
-
-For KV v2, vault-action expects the full API path: `mount/data/secret-path`.
+**Root cause:** The Vault JWT role `github-bridge-gateway-dev` does not have `bound_audiences` configured to accept the GitHub OIDC token's audience. The workflow uses `jwtGithubAudience: https://github.com/bridge-intelligence`, so the role must include this in `bound_audiences`.
 
 ---
 
-## Fix Applied
+## Vault Fix (run with root token)
 
-**File:** `.github/workflows/cd-dev.yml`
+```bash
+export VAULT_ADDR="https://vault.binari.digital"
+export VAULT_TOKEN="<your-root-token>"
 
-```yaml
-# Before
-kv/cicd/harbor/bridge-gateway/data/harbor-registry username | HARBOR_USERNAME ;
-kv/cicd/harbor/bridge-gateway/data/harbor-registry password | HARBOR_PASSWORD ;
+# 1. Inspect current role config
+vault read auth/jwt/role/github-bridge-gateway-dev
 
-# After
-kv/data/cicd/harbor/bridge-gateway username | HARBOR_USERNAME ;
-kv/data/cicd/harbor/bridge-gateway password | HARBOR_PASSWORD ;
+# 2. Update role to add bound_audiences (merge with existing config)
+vault write auth/jwt/role/github-bridge-gateway-dev \
+  bound_audiences="https://github.com/bridge-intelligence" \
+  user_claim="actor" \
+  role_type="jwt" \
+  policies="<existing-policy-name>" \
+  bound_claims_type="glob" \
+  bound_claims='{"repository":"bridge-intelligence/bridge-gateway"}'
+```
+
+**Note:** Replace `<existing-policy-name>` with the policy currently attached (from step 1). If the role has other settings (e.g. `token_ttl`), include them in the write.
+
+**Alternative:** If `github-bridge-orchestra-dev` works, copy its config:
+```bash
+vault read auth/jwt/role/github-bridge-orchestra-dev
+# Then replicate for github-bridge-gateway-dev with bound_claims for bridge-gateway repo
 ```
 
 ---
@@ -51,9 +65,8 @@ export VAULT_TOKEN="<your-token>"
 # Verify secret exists
 vault kv get kv/cicd/harbor/bridge-gateway
 
-# Verify JWT role exists
-vault list auth/jwt/role
-# Should include: github-bridge-gateway-dev
+# Verify JWT role exists and has bound_audiences
+vault read auth/jwt/role/github-bridge-gateway-dev
 ```
 
 ---
