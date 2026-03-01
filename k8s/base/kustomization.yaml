@@ -10,6 +10,6 @@ commonLabels:
 resources:
   - deployment.yaml
   - service.yaml
-  - ingress.yaml
+  # ingress.yaml excluded — managed by consolidated bridge-app-ingress
   - configmap.yaml
   - serviceaccount.yaml
